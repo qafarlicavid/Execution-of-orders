@@ -1,5 +1,8 @@
-﻿using DemoApplication.Database;
+﻿using DemoApplication.Areas.Client.ViewModels.Shop;
+using DemoApplication.Database;
+using DemoApplication.Services.Abstracts;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace DemoApplication.Areas.Client.Controllers
 {
@@ -8,10 +11,12 @@ namespace DemoApplication.Areas.Client.Controllers
     public class ShopController : Controller
     {
         private readonly DataContext _dataContext;
+        private readonly IUserService _userService;
 
-        public ShopController(DataContext dataContext)
+        public ShopController(DataContext dataContext, IUserService userService)
         {
             _dataContext = dataContext;
+            _userService= userService;
         }
         [HttpGet("cart", Name = "client-shop-cart")]
         public IActionResult Cart()
@@ -22,7 +27,25 @@ namespace DemoApplication.Areas.Client.Controllers
         [HttpGet("checkout", Name = "client-shop-checkout")]
         public async Task<IActionResult> CheckoutAsync()
         {
-            return View();
+            var model = new OrderViewModel
+            {
+                SumTotal = (int)_dataContext.BasketProducts.
+                Where(bp => bp.Basket!.UserId == _userService.CurrentUser.Id).Sum(bp => bp.Book!.Price * bp.Quantity)
+            };
+
+            model.Models = await _dataContext.BasketProducts
+                  .Where(bp => bp.Basket!.UserId == _userService.CurrentUser.Id)
+                  .Select(bp =>
+                      new OrderViewModel.ItemViewModel(
+                          bp.Id,
+                          bp.Book!.Title,
+                          bp.Quantity,
+                          bp.Book.Price,
+                          bp.Book.Price * bp.Quantity
+                          ))
+                  .ToListAsync();
+
+            return View(model);
         }
     }
 }
